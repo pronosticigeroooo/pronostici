@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pronostici Calcio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--tx:#1d1e22;--mu:#7b7f8a;--ac:#0a5c45;--bd:#e8eaee;--ok:#0b7a43;--okbg:#e3f6ec;
+box-sizing:border-box;color-scheme:light}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;padding-bottom:env(safe-area-inset-bottom,0px)}
+.top{background:var(--ac);color:#fff;padding:calc(env(safe-area-inset-top,0px) + 12px) 0 12px}
+.in{max-width:640px;margin:0 auto;padding:0 12px}
+.bar{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.tg{border:1px solid rgba(255,255,255,.65);background:transparent;color:#fff;border-radius:999px;padding:5px 13px;font:inherit;font-size:.8rem;margin-top:6px}
+.sm{display:grid;grid-template-columns:48px 1fr auto auto;gap:10px;align-items:center;padding:10px 12px}
+.sc{display:flex;flex-direction:column;gap:5px;text-align:center}
+.sc b{height:22px;line-height:22px;min-width:14px}
+.res{display:flex;align-items:center;gap:7px;max-width:150px;text-align:right}
+.res span{display:flex;flex-direction:column}
+.res b{font-size:.85rem}
+.res small{font-size:.7rem;color:var(--mu)}
+.dot{flex:none;width:14px;height:14px;border-radius:50%;background:#1fa463}
+.dot.l{background:#d93636}
+h1{font-family:"Barlow Condensed","DIN Condensed","Arial Narrow",sans-serif;font-size:2.3rem;line-height:1;margin:0 0 8px;font-weight:700;letter-spacing:.02em;text-transform:uppercase}
+main{max-width:640px;margin:0 auto;padding:10px 12px}
+.mu{color:var(--mu);font-size:.8rem}
+.nav{display:flex;align-items:center;gap:8px;background:var(--card);border-radius:10px;padding:6px;margin-bottom:8px;box-shadow:0 1px 2px rgba(20,24,31,.06)}
+.nv{width:44px;height:38px;border:0;background:var(--bg);border-radius:8px;font-size:1.5rem;line-height:1;color:var(--ac);font-weight:700}
+.nv:disabled{opacity:.3}
+.dc{position:relative;flex:1;text-align:center;font-weight:700;font-size:.95rem;text-transform:capitalize}
+.dc input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0}
+select{width:100%;font:inherit;font-size:.9rem;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:9px;margin-bottom:6px}
+.sum{margin:2px 0 6px}
+.lg{background:var(--card);border-radius:10px;margin:10px 0;overflow:hidden;box-shadow:0 1px 2px rgba(20,24,31,.06)}
+.lh{padding:11px 12px;font-weight:700;font-size:.92rem;border-bottom:1px solid var(--bd)}
+.lh span{font-weight:400;color:var(--mu)}
+summary{display:grid;grid-template-columns:48px 1fr auto;gap:10px;align-items:center;padding:10px 12px;cursor:pointer;list-style:none}
+summary::-webkit-details-marker{display:none}
+.tm{color:var(--mu);font-size:.82rem;text-align:center;padding-right:4px}
+.tt{font-size:.95rem;display:flex;flex-direction:column;gap:5px}
+.te{display:flex;align-items:center;gap:8px}
+.lo{position:relative;flex:none;width:22px;height:22px}
+.lo i{position:absolute;inset:0;border-radius:50%;background:var(--bd);color:var(--mu);font-style:normal;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center}
+.lo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fff}
+.rec{display:flex;flex-direction:column;align-items:flex-end;background:var(--okbg);color:var(--ok);border-radius:8px;padding:4px 9px;max-width:150px;text-align:right}
+.rec b{font-size:.9rem}
+.rec small{font-size:.7rem}
+.no{color:var(--mu);font-size:.78rem}
+.dt{padding:4px 12px 12px;background:#fafbfc}
+.why{font-size:.85rem;margin:4px 0 8px;color:var(--tx)}
+.pk{display:grid;grid-template-columns:1fr auto 56px;gap:8px;padding:6px 0;border-top:1px solid var(--bd);font-size:.9rem}
+.pk small{color:var(--mu)}
+.pk b{text-align:right;color:var(--ac)}
+.pk i{font-style:normal;text-align:right;color:var(--mu)}
+.demo{background:#fff3cd;color:#5c4400;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:.85rem}
+</style>
+</head>
+<body>
+<header class="top"><div class="in"><div class="bar"><h1>Pronostici Calcio</h1><button id="tg" class="tg">Risultati</button></div></div></header>
+<main>
+<div id="demo"></div>
+<div class="nav"><button class="nv" id="pv" aria-label="Giorno precedente">‹</button><div class="dc"><span id="dlb"></span><input type="date" id="dp" aria-label="Scegli il giorno"></div><button class="nv" id="nx" aria-label="Giorno successivo">›</button></div>
+<select id="lg"></select>
+<div class="sum mu" id="sum"></div>
+<div id="list"></div>
+<p class="mu" id="foot"></p>
+<p class="mu">Stime statistiche, non certezze: nessun modello batte stabilmente i bookmaker. Le quote di mercato sono medie di vari bookmaker, non di Eurobet: controlla su Eurobet che la quota sia almeno quella indicata in “gioca da”. Gioca responsabilmente.</p>
+</main>
+<script>
+const DATA=__DATA__;
+const $=id=>document.getElementById(id);
+const pc=x=>Math.round(x*100)+"%",f2=x=>x.toFixed(2).replace(".",",");
+const FL={Italia:"IT",Spagna:"ES",Germania:"DE",Francia:"FR","Paesi Bassi":"NL",Belgio:"BE",Portogallo:"PT",Turchia:"TR",Grecia:"GR"};
+const TAG=s=>String.fromCodePoint(0x1F3F4,...[...s].map(c=>0xE0000+c.charCodeAt(0)),0xE007F);
+const flag=co=>co==="Inghilterra"?TAG("gbeng"):co==="Scozia"?TAG("gbsct"):FL[co]?String.fromCodePoint(...[...FL[co]].map(c=>0x1F1E6+c.charCodeAt(0)-65)):"";
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const dl=k=>{const[y,m,d]=k.split("-");return new Date(y,m-1,d).toLocaleDateString("it-IT",{weekday:"short",day:"numeric",month:"short"})};
+const NEXT=DATA.matches,DONE=DATA.done||[];
+let mode="next",sel="",lg="";
+const cur=()=>mode==="next"?NEXT:DONE;
+const datesOf=()=>[...new Set(cur().map(m=>m.d))].sort();
+if(DATA.demo)$("demo").innerHTML='<div class="demo">Anteprima con squadre e dati inventati. Online vedrai i dati reali.</div>';
+$("foot").textContent="Ultimo aggiornamento: "+DATA.updated;
+const key=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const addD=(k,n)=>{const[y,m,d]=k.split("-");return key(new Date(+y,m-1,+d+n))};
+function dayName(k){const t=key(new Date());return k===t?"Oggi":k===addD(t,1)?"Domani":k===addD(t,-1)?"Ieri":dl(k)}
+function drawDays(){
+  const ds=datesOf(),mn=ds[0],mx=ds[ds.length-1],has=!!(sel&&ds.length),p=$("dp");
+  $("dlb").textContent=has?dayName(sel):"Nessuna data";
+  p.min=mn||"";p.max=mx||"";p.value=sel||"";p.disabled=!ds.length;
+  $("pv").disabled=!has||sel<=mn;$("nx").disabled=!has||sel>=mx;
+}
+function drawLg(){
+  const lgs=[];cur().forEach(m=>{if(!lgs.some(l=>l.k===m.c))lgs.push({k:m.c,co:m.co,lg:m.lg})});
+  let h='<option value="">Tutti i campionati</option>',c0="";
+  lgs.forEach(l=>{if(l.co!==c0){if(c0)h+="</optgroup>";h+=`<optgroup label="${flag(l.co)} ${esc(l.co)}">`;c0=l.co}
+    h+=`<option value="${l.k}">${esc(l.lg)}</option>`});
+  $("lg").innerHTML=h+(c0?"</optgroup>":"");
+}
+function team(n,u){return `<span class="te"><span class="lo"><i>${esc(n.trim().charAt(0).toUpperCase())}</i>${u?`<img src="${esc(u)}" alt="" loading="lazy" onerror="this.remove()">`:""}</span>${esc(n)}</span>`}
+function row(m){
+  const r=m.rec;
+  const badge=r?`<span class="rec"><b>${esc(r.label)}</b><small>${pc(r.p)} · gioca da @${f2(Math.max(1.03/r.p,1.01))}</small></span>`:'<span class="no">Nessuna giocata</span>';
+  let why;
+  if(r&&r.odd)why=`Giocata consigliata: il modello stima ${pc(r.p)}, il mercato paga @${f2(r.odd)} (probabilità implicita ${pc(1/r.odd)}): valore ${r.v>0?"+":""}${Math.round(r.v*100)}%. Su Eurobet gioca solo se la quota è almeno @${f2(1.03/r.p)}.`;
+  else if(r)why=`Giocata consigliata per l’alta probabilità stimata (${pc(r.p)}); quote di mercato non disponibili. Su Eurobet gioca solo se la quota è almeno @${f2(1.03/r.p)}.`;
+  else why="Nessuna quota di mercato ha valore rispetto alla stima: meglio non giocare questa partita.";
+  const pk=m.pk.slice(0,12).map(x=>`<div class="pk"><span>${esc(x[0])} <small>${x[1]}</small></span><i>${x[3]?"@"+f2(x[3]):""}</i><b>${pc(x[2])}</b></div>`).join("");
+  return `<details class="m"><summary><span class="tm">${m.t||""}</span><span class="tt">${team(m.h,m.hl)}${team(m.a,m.al)}</span>${badge}</summary><div class="dt"><div class="why">${why}</div>${pk}</div></details>`;
+}
+function rowDone(m){
+  const p=m.top;
+  return `<div class="m sm"><span class="tm">${m.t||""}</span><span class="tt">${team(m.h,m.hl)}${team(m.a,m.al)}</span><span class="sc"><b>${m.res[0]}</b><b>${m.res[1]}</b></span><span class="res"><i class="dot${m.won?"":" l"}"></i><span><b>${esc(p.label)}</b><small>${pc(p.p)}</small></span></span></div>`;
+}
+function render(){
+  const done=mode==="done";
+  const ms=cur().filter(m=>m.d===sel&&(!lg||m.c===lg));
+  if(done){
+    const w=ms.filter(m=>m.won).length,S=DATA.stats||{n:0,w:0};
+    $("sum").textContent=(ms.length?`Giorno: ${w} vinte, ${ms.length-w} perse. `:"")+(S.n?`Totale: ${S.w} vinte su ${S.n} (${pc(S.w/S.n)}). `:"")+"Conta solo la scommessa con la probabilità più alta di ogni partita.";
+  }else $("sum").textContent=ms.length?`${ms.length} giocate consigliate`:"";
+  if(!ms.length){$("list").innerHTML=`<div class="mu">${done?"Ancora nessuna partita conclusa: i risultati compaiono dopo le partite.":"Nessuna giocata consigliata per questa selezione."}</div>`;return}
+  const g=[];ms.forEach(m=>{let x=g.find(y=>y.c===m.c);if(!x)g.push(x={c:m.c,co:m.co,lg:m.lg,ms:[]});x.ms.push(m)});
+  $("list").innerHTML=g.map(x=>`<div class="lg"><div class="lh">${flag(x.co)} ${esc(x.lg)} <span>· ${esc(x.co)}</span></div>${x.ms.map(done?rowDone:row).join("")}</div>`).join("");
+}
+function draw(){drawDays();drawLg();render()}
+$("pv").onclick=()=>{if($("pv").disabled)return;sel=addD(sel,-1);drawDays();render()};
+$("nx").onclick=()=>{if($("nx").disabled)return;sel=addD(sel,1);drawDays();render()};
+$("dp").onchange=e=>{if(e.target.value){sel=e.target.value;drawDays();render()}};
+$("dp").onclick=e=>{if(!("ontouchstart" in window)){try{e.target.showPicker()}catch(_){}}};
+$("lg").onchange=e=>{lg=e.target.value;render()};
+$("tg").onclick=()=>{mode=mode==="next"?"done":"next";lg="";const ds=datesOf();sel=mode==="next"?ds[0]||"":ds[ds.length-1]||"";$("tg").textContent=mode==="next"?"Risultati":"Prossime";draw()};
+sel=datesOf()[0]||"";draw();
+</script>
+</body>
+</html>
