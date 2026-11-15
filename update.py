@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Scarica risultati e calendari reali da football-data.co.uk, stima le probabilita'
 con un modello Poisson e genera docs/index.html (la pagina pubblicata)."""
-import csv, io, json, math, os, time, urllib.parse, urllib.request
+import csv, difflib, io, json, math, os, re, time, urllib.parse, urllib.request
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -295,6 +295,51 @@ def update_history(out, res, today):
     return hist
 
 
+def norm(s):
+    return re.sub(r"[^a-z]", "", s.lower())
+
+
+def same(a, b):
+    a, b = norm(ALIAS.get(a, a)), norm(b)
+    return bool(a and b) and (a in b or b in a or difflib.SequenceMatcher(None, a, b).ratio() >= 0.8)
+
+
+def load_world(today, out):
+    """Calendario di tutte le altre partite di calcio nel mondo (senza pronostico), da TheSportsDB."""
+    pred = {}
+    for x in out:
+        pred.setdefault(x["d"], []).append(x["h"])
+    world = []
+    for k in range(7):
+        day = (today + timedelta(days=k)).isoformat()
+        try:
+            data = json.loads(get(f"https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d={day}&s=Soccer"))
+        except Exception as e:
+            print("mondo: salto", day, e)
+            continue
+        for ev in data.get("events") or []:
+            h, a, lg = (ev.get("strHomeTeam") or "").strip(), (ev.get("strAwayTeam") or "").strip(), (ev.get("strLeague") or "").strip()
+            if not h or not a or not lg or ev.get("strSport", "Soccer") != "Soccer":
+                continue
+            d, t = ev.get("dateEvent") or day, ""
+            try:
+                if ev.get("strTime"):
+                    dt = datetime.fromisoformat((ev.get("strTimestamp") or f"{d}T{ev['strTime']}").replace("Z", "+00:00"))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+                    dt = dt.astimezone(ZoneInfo("Europe/Rome"))
+                    d, t = dt.date().isoformat(), dt.strftime("%H:%M")
+            except Exception:
+                pass
+            if any(same(p, h) for p in pred.get(d, [])):
+                continue            # gia' presente con pronostico
+            world.append({"c": "w|" + lg, "co": "", "lg": lg, "d": d, "t": t, "h": h, "a": a,
+                          "hl": ev.get("strHomeTeamBadge") or None, "al": ev.get("strAwayTeamBadge") or None, "w": 1})
+    world.sort(key=lambda x: (x["lg"], x["d"], x["t"]))
+    print("mondo:", len(world), "partite")
+    return world[:2500]
+
+
 def main():
     today = date.today()
     res = load_results(today)
@@ -307,7 +352,6 @@ def main():
             continue
         co, lg = LEAGUES[c]
         out.append({"c": c, "co": co, "lg": lg, "d": d.isoformat(), "t": t, "h": h, "a": a, **predict(m, h, a, r)})
-    out = [x for x in out if x["rec"]]      # si mostrano solo le partite con una giocata consigliata
     logos = load_logos({(x["h"], x["co"]) for x in out} | {(x["a"], x["co"]) for x in out})
     for x in out:
         x["hl"], x["al"] = logos.get(x["h"]) or None, logos.get(x["a"]) or None
@@ -319,8 +363,9 @@ def main():
     done = sorted([e for e in hist.values() if e.get("res") and e["d"] >= cut], key=sk)
     fin = [e for e in hist.values() if e.get("res")]
     stats = {"n": len(fin), "w": sum(1 for e in fin if e.get("won"))}
+    world = load_world(today, out)
     data = {"updated": datetime.now(ZoneInfo("Europe/Rome")).strftime("%d/%m/%Y %H:%M"),
-            "demo": bool(os.environ.get("DEMO")), "matches": out, "done": done, "stats": stats}
+            "demo": bool(os.environ.get("DEMO")), "matches": out, "world": world, "done": done, "stats": stats}
     tpl = open("template.html", encoding="utf-8").read()
     js = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     os.makedirs("docs", exist_ok=True)
