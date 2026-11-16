@@ -10,7 +10,8 @@ KEY = os.environ.get("BSD_KEY", "").strip()
 
 def call(path, **params):
     q = "&".join(f"{k}={v}" for k, v in params.items())
-    req = urllib.request.Request(BASE + path + ("?" + q if q else ""),
+    sep = "&" if "?" in path else "?"
+    req = urllib.request.Request(BASE + path + (sep + q if q else ""),
                                  headers={"Authorization": "Token " + KEY, "User-Agent": "pronostici-bot"})
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
@@ -52,6 +53,10 @@ def fetch_all(path, pages=12, **params):
     return st, hdr, out, None
 
 
+def sec(title, st, obj):
+    return f"<h3>{html.escape(title)} <small>(codice {st})</small></h3><pre>" + html.escape(json.dumps(obj, ensure_ascii=False, indent=1)[:2500]) + "</pre>"
+
+
 def main():
     parts = []
     if not KEY:
@@ -59,31 +64,37 @@ def main():
     else:
         today = date.today()
         st, hdr, ev, err = fetch_all("events/", date_from=today.isoformat(), date_to=(today + timedelta(days=7)).isoformat())
-        parts.append(f"<h2>Prossimi 7 giorni</h2><p>Codice risposta: <b>{st}</b> · partite trovate: <b>{len(ev)}</b></p>")
-        for k in ("RateLimit-Policy", "RateLimit"):
-            if k in hdr:
-                parts.append(f"<p>{k}: {html.escape(hdr[k])}</p>")
-        if err:
-            parts.append("<pre>" + html.escape(json.dumps(err, ensure_ascii=False)[:600]) + "</pre>")
-        if ev:
-            cnt = {}
-            for e in ev:
-                cnt[league_of(e)] = cnt.get(league_of(e), 0) + 1
-            rows = "".join(f"<tr><td>{html.escape(k)}</td><td>{v}</td></tr>" for k, v in sorted(cnt.items(), key=lambda x: -x[1]))
-            parts.append(f"<h2>Campionati ({len(cnt)})</h2><table>{rows}</table>")
-            parts.append("<h2>Struttura di una partita</h2><pre>" + html.escape(json.dumps(shape(ev[0]), ensure_ascii=False, indent=1)) + "</pre>")
-            withodds = next((e for e in ev if any("odds" in k for k in e)), None)
-            if withodds:
-                parts.append("<h2>Campi con le quote</h2><pre>" + html.escape(json.dumps({k: shape(v) for k, v in withodds.items() if "odds" in k or "prob" in k}, ensure_ascii=False, indent=1)) + "</pre>")
-        st2, _, fin, err2 = fetch_all("events/", pages=1, status="finished", date_from=(today - timedelta(days=7)).isoformat(), date_to=today.isoformat())
-        parts.append(f"<h2>Partite finite (ultimi 7 giorni)</h2><p>Codice: <b>{st2}</b> · trovate in 1 pagina: <b>{len(fin)}</b></p>")
-        if fin:
-            parts.append("<pre>" + html.escape(json.dumps({k: v for k, v in shape(fin[0]).items() if k in ("home_score", "away_score", "status", "score", "scores", "result")}, ensure_ascii=False, indent=1)) + "</pre>")
-        if err2:
-            parts.append("<pre>" + html.escape(json.dumps(err2, ensure_ascii=False)[:400]) + "</pre>")
+        parts.append(f"<h2>Partite dei prossimi 7 giorni: {len(ev)} (codice {st})</h2>")
+        stl, _, lg, errl = fetch_all("leagues/", pages=4)
+        names = {}
+        for x in lg:
+            if isinstance(x, dict) and x.get("id") is not None:
+                names[x["id"]] = x
+        parts.append(f"<h2>Campionati: {len(lg)} (codice {stl})</h2>")
+        if lg:
+            parts.append("<pre>" + html.escape(json.dumps(shape(lg[0]), ensure_ascii=False, indent=1)) + "</pre>")
+        if errl:
+            parts.append("<pre>" + html.escape(json.dumps(errl, ensure_ascii=False)[:400]) + "</pre>")
+        cnt = {}
+        for e in ev:
+            cnt[e.get("league_id")] = cnt.get(e.get("league_id"), 0) + 1
+        def nm(i):
+            x = names.get(i, {})
+            return " / ".join(str(x.get(k)) for k in ("name", "country", "country_name") if x.get(k)) or "?"
+        rows = "".join(f"<tr><td>{k}</td><td>{html.escape(nm(k))}</td><td>{v}</td></tr>" for k, v in sorted(cnt.items(), key=lambda x: -x[1]))
+        parts.append(f"<h2>Partite per campionato ({len(cnt)})</h2><table>{rows}</table>")
+        pick = next((e for e in ev if any(t in nm(e.get("league_id")).lower() for t in ("serie a", "premier", "la liga", "bundesliga"))), ev[0] if ev else None)
+        if pick:
+            eid = pick["id"]
+            parts.append(f"<h2>Ricerca quote e infortuni (partita {eid}: {html.escape(str(pick.get('home_team')))} - {html.escape(str(pick.get('away_team')))})</h2>")
+            for path in ("", f"events/{eid}/", f"odds/?event_id={eid}", f"odds/?event={eid}", f"predictions/?event_id={eid}",
+                         f"events/{eid}/odds/", f"events/{eid}/lineups/", f"unavailable-players/?event_id={eid}"):
+                s2, _, d2 = call(path, limit=3) if "?" not in path else call(path)
+                body = d2.get("results", d2) if isinstance(d2, dict) else d2
+                parts.append(sec("/api/v2/" + path, s2, shape(body[0] if isinstance(body, list) and body else body)))
     page = ("<!DOCTYPE html><html lang='it'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
             "<title>Test BSD</title><style>body{font:15px system-ui;max-width:800px;margin:0 auto;padding:16px}pre{background:#f2f4f7;padding:10px;overflow:auto;font-size:12px}"
-            "td{padding:3px 10px;border-bottom:1px solid #eee}</style></head><body><h1>Test BSD (temporaneo)</h1>" + "".join(parts) + "</body></html>")
+            "td{padding:3px 10px;border-bottom:1px solid #eee}</style></head><body><h1>Test BSD 2 (temporaneo)</h1>" + "".join(parts) + "</body></html>")
     os.makedirs("docs", exist_ok=True)
     open("docs/bsd-test.html", "w", encoding="utf-8").write(page)
     print("pagina creata")
