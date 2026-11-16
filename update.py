@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Scarica risultati e calendari reali da football-data.co.uk, stima le probabilita'
 con un modello Poisson e genera docs/index.html (la pagina pubblicata)."""
-import csv, difflib, io, json, math, os, re, time, urllib.parse, urllib.request
+import csv, io, json, math, os, sys, time, urllib.parse, urllib.request
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -160,6 +160,10 @@ def odd(r, key):
 def predict(model, h, a, r):
     at, de, mu, ha = model
     lh, la = mu * ha * at[h] * de[a], mu * at[a] * de[h]
+    return predict_l(lh, la, h, a, r)
+
+
+def predict_l(lh, la, h, a, r):
     H = D = A = o = b = 0.0
     sc = []
     for i in range(10):
@@ -265,7 +269,7 @@ def won(key, hg, ag):
             "O": hg + ag > 2, "U": hg + ag <= 2, "G": hg > 0 and ag > 0, "NG": hg == 0 or ag == 0}.get(key)
 
 
-def update_history(out, res, today):
+def update_history(out, res, today, extra_res=None):
     """Memorizza la scommessa con probabilita' piu' alta di ogni partita e, a gara finita, la verifica."""
     try:
         hist = json.load(open(HIST_FILE, encoding="utf-8"))
@@ -280,6 +284,8 @@ def update_history(out, res, today):
     for c, ms in res.items():
         for x in ms:
             idx.setdefault((c, x["h"], x["a"]), []).append((x["d"], x["hg"], x["ag"]))
+    for k, v in (extra_res or {}).items():
+        idx.setdefault(k, []).extend(v)
     for i in list(hist):
         e = hist[i]
         if e["d"] < (today - timedelta(days=120)).isoformat():
@@ -293,51 +299,6 @@ def update_history(out, res, today):
                     break
     json.dump(hist, open(HIST_FILE, "w", encoding="utf-8"), ensure_ascii=False)
     return hist
-
-
-def norm(s):
-    return re.sub(r"[^a-z]", "", s.lower())
-
-
-def same(a, b):
-    a, b = norm(ALIAS.get(a, a)), norm(b)
-    return bool(a and b) and (a in b or b in a or difflib.SequenceMatcher(None, a, b).ratio() >= 0.8)
-
-
-def load_world(today, out):
-    """Calendario di tutte le altre partite di calcio nel mondo (senza pronostico), da TheSportsDB."""
-    pred = {}
-    for x in out:
-        pred.setdefault(x["d"], []).append(x["h"])
-    world = []
-    for k in range(7):
-        day = (today + timedelta(days=k)).isoformat()
-        try:
-            data = json.loads(get(f"https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d={day}&s=Soccer"))
-        except Exception as e:
-            print("mondo: salto", day, e)
-            continue
-        for ev in data.get("events") or []:
-            h, a, lg = (ev.get("strHomeTeam") or "").strip(), (ev.get("strAwayTeam") or "").strip(), (ev.get("strLeague") or "").strip()
-            if not h or not a or not lg or ev.get("strSport", "Soccer") != "Soccer":
-                continue
-            d, t = ev.get("dateEvent") or day, ""
-            try:
-                if ev.get("strTime"):
-                    dt = datetime.fromisoformat((ev.get("strTimestamp") or f"{d}T{ev['strTime']}").replace("Z", "+00:00"))
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
-                    dt = dt.astimezone(ZoneInfo("Europe/Rome"))
-                    d, t = dt.date().isoformat(), dt.strftime("%H:%M")
-            except Exception:
-                pass
-            if any(same(p, h) for p in pred.get(d, [])):
-                continue            # gia' presente con pronostico
-            world.append({"c": "w|" + lg, "co": "", "lg": lg, "d": d, "t": t, "h": h, "a": a,
-                          "hl": ev.get("strHomeTeamBadge") or None, "al": ev.get("strAwayTeamBadge") or None, "w": 1})
-    world.sort(key=lambda x: (x["lg"], x["d"], x["t"]))
-    print("mondo:", len(world), "partite")
-    return world[:2500]
 
 
 def main():
@@ -355,17 +316,24 @@ def main():
     logos = load_logos({(x["h"], x["co"]) for x in out} | {(x["a"], x["co"]) for x in out})
     for x in out:
         x["hl"], x["al"] = logos.get(x["h"]) or None, logos.get(x["a"]) or None
-    sk = lambda x: (TOP.index(x["co"]) if x["co"] in TOP else 10, "" if x["co"] in TOP else x["co"],
-                    list(LEAGUES).index(x["c"]), x["d"], x["t"])
+    extra_res = {}
+    try:                                   # nazionali e coppe europee (se qualcosa non va, si salta)
+        import extra
+        ex, extra_res = extra.build(sys.modules[__name__], today)
+        out += ex
+    except Exception as e:
+        print("extra: saltato", e)
+    sk = lambda x: (-1 if x["co"] == "Europa" else TOP.index(x["co"]) if x["co"] in TOP else 10,
+                    "" if x["co"] in TOP or x["co"] == "Europa" else x["co"],
+                    list(LEAGUES).index(x["c"]) if x["c"] in LEAGUES else 99, x["lg"], x["d"], x["t"])
     out.sort(key=sk)
-    hist = update_history(out, res, today)
+    hist = update_history(out, res, today, extra_res)
     cut = (today - timedelta(days=14)).isoformat()
     done = sorted([e for e in hist.values() if e.get("res") and e["d"] >= cut], key=sk)
     fin = [e for e in hist.values() if e.get("res")]
     stats = {"n": len(fin), "w": sum(1 for e in fin if e.get("won"))}
-    world = load_world(today, out)
     data = {"updated": datetime.now(ZoneInfo("Europe/Rome")).strftime("%d/%m/%Y %H:%M"),
-            "demo": bool(os.environ.get("DEMO")), "matches": out, "world": world, "done": done, "stats": stats}
+            "demo": bool(os.environ.get("DEMO")), "matches": out, "done": done, "stats": stats}
     tpl = open("template.html", encoding="utf-8").read()
     js = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     os.makedirs("docs", exist_ok=True)

@@ -41,6 +41,8 @@ select{width:100%;font:inherit;font-size:.9rem;color:var(--tx);background:var(--
 .lh span{font-weight:400;color:var(--mu)}
 summary{display:grid;grid-template-columns:48px 1fr auto;gap:10px;align-items:center;padding:10px 12px;cursor:pointer;list-style:none}
 summary::-webkit-details-marker{display:none}
+.bx{display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.rec.k{background:var(--ac);color:#fff}
 .sec{font-weight:700;font-size:1rem;margin:16px 2px 2px}
 .ll{font-size:.72rem;color:var(--mu)}
 .tm{color:var(--mu);font-size:.82rem;text-align:center;padding-right:4px}
@@ -71,13 +73,13 @@ summary::-webkit-details-marker{display:none}
 <div class="sum mu" id="sum"></div>
 <div id="list"></div>
 <p class="mu" id="foot"></p>
-<p class="mu">Stime statistiche, non certezze (nel backtest le giocate non hanno dato profitto): nessun modello batte stabilmente i bookmaker. Le quote di mercato sono medie di vari bookmaker, non di Eurobet: controlla su Eurobet che la quota sia almeno quella indicata in “gioca da”. Gioca responsabilmente.</p>
+<p class="mu">Stime statistiche, non certezze (nel backtest le giocate non hanno dato profitto): nessun modello batte stabilmente i bookmaker. Le quote di mercato sono medie di vari bookmaker: controlla sul tuo bookmaker che la quota sia almeno quella indicata nel dettaglio della partita. Gioca responsabilmente.</p>
 </main>
 <script>
 const DATA=__DATA__;
 const $=id=>document.getElementById(id);
 const pc=x=>Math.round(x*100)+"%",f2=x=>x.toFixed(2).replace(".",",");
-const FL={Italia:"IT",Spagna:"ES",Germania:"DE",Francia:"FR","Paesi Bassi":"NL",Belgio:"BE",Portogallo:"PT",Turchia:"TR",Grecia:"GR"};
+const FL={Italia:"IT",Spagna:"ES",Germania:"DE",Francia:"FR","Paesi Bassi":"NL",Belgio:"BE",Portogallo:"PT",Turchia:"TR",Grecia:"GR",Europa:"EU"};
 const TAG=s=>String.fromCodePoint(0x1F3F4,...[...s].map(c=>0xE0000+c.charCodeAt(0)),0xE007F);
 const flag=co=>co==="Inghilterra"?TAG("gbeng"):co==="Scozia"?TAG("gbsct"):FL[co]?String.fromCodePoint(...[...FL[co]].map(c=>0x1F1E6+c.charCodeAt(0)-65)):"";
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -109,8 +111,10 @@ function rowW(m){return `<div class="m sm"><span class="tm">${m.t||""}</span><sp
 function row(m,sl){
   const r=m.top;
   const o=(m.pk.find(x=>x[0]===r.label)||[])[3];
-  const badge=`<span class="rec"><b>${esc(r.label)}</b><small>${pc(r.p)} · da @${f2(Math.max(1.03/r.p,1.01))}</small></span>`;
-  const why=`Scommessa con la probabilità più alta: il modello stima ${pc(r.p)}. `+(o?`Il mercato paga @${f2(o)} (probabilità implicita ${pc(1/o)}). `:"Quota di mercato non disponibile per questa giocata. ")+`Su Eurobet controlla che la quota sia almeno @${f2(1.03/r.p)}.`;
+  const k=m.rec;
+  const badge=`<span class="bx"><span class="rec"><b>${esc(r.label)}</b><small>Più probabile · ${pc(r.p)}</small></span>${k?`<span class="rec k"><b>${esc(k.label)}</b><small>Consigliata · ${pc(k.p)}${k.odd?" · @"+f2(k.odd):""}</small></span>`:""}</span>`;
+  let why=`Più probabile: ${r.label}, il modello stima ${pc(r.p)}. `+(o?`Il mercato paga @${f2(o)} (probabilità implicita ${pc(1/o)}). `:"Quota di mercato non disponibile per questa giocata. ")+`Sul tuo bookmaker controlla che la quota sia almeno @${f2(1.03/r.p)}. `;
+  if(k)why+=k.odd?`Consigliata dal modello: ${k.label}, stima ${pc(k.p)} contro il ${pc(1/k.odd)} implicito nella quota @${f2(k.odd)} (valore ${k.v>0?"+":""}${Math.round(k.v*100)}%). Sul tuo bookmaker gioca solo se la quota è almeno @${f2(1.03/k.p)}.`:`Consigliata dal modello: ${k.label} (${pc(k.p)}).`;
   const pk=m.pk.slice(0,12).map(x=>`<div class="pk"><span>${esc(x[0])} <small>${x[1]}</small></span><i>${x[3]?"@"+f2(x[3]):""}</i><b>${pc(x[2])}</b></div>`).join("");
   return `<details class="m"><summary><span class="tm">${m.t||""}</span><span class="tt">${team(m.h,m.hl)}${team(m.a,m.al)}${sl?`<span class="ll">${flag(m.co)} ${esc(m.lg)}</span>`:""}</span>${badge}</summary><div class="dt"><div class="why">${why}</div>${pk}</div></details>`;
 }
@@ -129,7 +133,7 @@ function render(){
   const grp=a=>{const g=[];a.forEach(m=>{let x=g.find(y=>y.c===m.c);if(!x)g.push(x={c:m.c,co:m.co,lg:m.lg,ms:[]});x.ms.push(m)});return g};
   const card=(x,f)=>`<div class="lg"><div class="lh">${flag(x.co)} ${esc(x.lg)} <span>${x.co?"· "+esc(x.co):""}</span></div>${x.ms.map(f).join("")}</div>`;
   if(done){$("list").innerHTML=grp(ms).map(x=>card(x,rowDone)).join("");return}
-  const recs=ms.filter(m=>!m.w&&m.top.p>=0.70).sort((a,b)=>b.top.p-a.top.p).slice(0,10);
+  const recs=ms.filter(m=>!m.w&&m.rec).sort((a,b)=>((b.rec.v||0)-(a.rec.v||0))||(b.rec.p-a.rec.p)).slice(0,10);
   const used=new Set(recs),rest=ms.filter(m=>!used.has(m));
   let h="";
   if(recs.length)h+=`<div class="sec">Giocate consigliate</div><div class="lg">${recs.map(m=>row(m,true)).join("")}</div>`;
