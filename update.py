@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Scarica risultati e calendari reali da football-data.co.uk, stima le probabilita'
 con un modello Poisson e genera docs/index.html (la pagina pubblicata)."""
-import csv, io, json, math, os, sys, time, urllib.parse, urllib.request
+import base64, csv, io, json, math, os, sys, time, urllib.parse, urllib.request
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -189,11 +189,16 @@ def predict_l(lh, la, h, a, r):
         x.append(k)
     core = [x for x in picks if x[1] in ("Esito finale", "Under/Over", "Gol/No Gol")]
     cands = [x for x in picks if x[3]]
-    rec = None
-    best = max(cands, key=lambda x: x[2] * x[3] - 1, default=None)
-    if best and best[2] * best[3] - 1 >= MIN_VALUE and best[2] >= MIN_PROB:
+    val = lambda x: x[2] * x[3] - 1
+    rec, weak = None, False
+    best = max(cands, key=val, default=None)
+    if best and val(best) >= MIN_VALUE and best[2] >= MIN_PROB:
         rec = best
-    elif not cands:
+    elif cands:
+        c2 = [x for x in cands if x[2] >= MIN_PROB]
+        if c2:
+            rec, weak = max(c2, key=val), True
+    else:
         top = max(core, key=lambda x: x[2])
         if top[2] >= 0.60:
             rec = top
@@ -201,7 +206,7 @@ def predict_l(lh, la, h, a, r):
     rd = lambda x: round(x, 4)
     return {
         "pk": [[x[0], x[1], rd(x[2]), x[3]] for x in allp],
-        "rec": None if not rec else {"label": rec[0], "key": rec[4], "market": rec[1], "p": rd(rec[2]), "odd": rec[3],
+        "rec": None if not rec else {"weak": weak, "label": rec[0], "key": rec[4], "market": rec[1], "p": rd(rec[2]), "odd": rec[3],
                                       "v": rd(rec[2] * rec[3] - 1) if rec[3] else None},
         "conf": rd(max(x[2] for x in core)),
         "top": (lambda t: {"label": t[0], "market": t[1], "p": rd(t[2]), "key": t[4]})(max(picks, key=lambda x: x[2])),
@@ -279,7 +284,7 @@ def update_history(out, res, today, extra_res=None):
     for x in out:
         i = f"{x['c']}|{x['d']}|{x['h']}|{x['a']}"
         if x["d"] > t0 or i not in hist:      # fino al giorno prima la previsione si aggiorna, poi si congela
-            hist[i] = {k: x[k] for k in ("c", "co", "lg", "d", "t", "h", "a", "top", "hl", "al")}
+            hist[i] = {k: x.get(k) for k in ("c", "co", "fl", "lg", "d", "t", "h", "a", "top", "hl", "al")}
     idx = {}
     for c, ms in res.items():
         for x in ms:
@@ -301,31 +306,60 @@ def update_history(out, res, today, extra_res=None):
     return hist
 
 
+def mk_ts(d, t):
+    try:
+        hh, mm = map(int, t.split(":"))
+        y, m, dd = map(int, d.split("-"))
+        return int(datetime(y, m, dd, hh, mm, tzinfo=ZoneInfo("Europe/Rome")).timestamp())
+    except Exception:
+        return None
+
+
+def logo_uri():
+    for name, mime in (("logo.png", "image/png"), ("logo.jpg", "image/jpeg"), ("logo.jpeg", "image/jpeg"),
+                       ("logo.webp", "image/webp"), ("logo.svg", "image/svg+xml")):
+        if os.path.exists(name):
+            return f"data:{mime};base64," + base64.b64encode(open(name, "rb").read()).decode()
+    return ""
+
+
 def main():
     today = date.today()
     res = load_results(today)
     models = {c: fit(obs(ms, USE_SHOTS)) for c, ms in res.items() if len(ms) >= 30}
-    out = []
-    for c, d, t, h, a, r in load_fixtures():
-        m = models.get(c)
-        d, t = local_time(d, t)
-        if not m or h not in m[0] or a not in m[0] or d < today:
-            continue
-        co, lg = LEAGUES[c]
-        out.append({"c": c, "co": co, "lg": lg, "d": d.isoformat(), "t": t, "h": h, "a": a, **predict(m, h, a, r)})
-    logos = load_logos({(x["h"], x["co"]) for x in out} | {(x["a"], x["co"]) for x in out})
-    for x in out:
-        x["hl"], x["al"] = logos.get(x["h"]) or None, logos.get(x["a"]) or None
-    extra_res = {}
-    try:                                   # nazionali e coppe europee (se qualcosa non va, si salta)
-        import extra
-        ex, extra_res = extra.build(sys.modules[__name__], today)
-        out += ex
-    except Exception as e:
-        print("extra: saltato", e)
+    out, extra_res, used_bsd = [], {}, False
+    key = os.environ.get("BSD_KEY", "").strip()
+    if key:                                # fonte principale: calendario mondiale, quote e assenti
+        try:
+            import bsd
+            out, extra_res = bsd.build(sys.modules[__name__], today, key, models)
+            used_bsd = bool(out)
+        except Exception as e:
+            print("bsd: saltato, uso le fonti di riserva:", e)
+    if not used_bsd:                       # fonti di riserva (football-data.co.uk, nazionali e coppe)
+        out, extra_res = [], {}
+        for c, d, t, h, a, r in load_fixtures():
+            m = models.get(c)
+            d, t = local_time(d, t)
+            if not m or h not in m[0] or a not in m[0] or d < today:
+                continue
+            co, lg = LEAGUES[c]
+            out.append({"c": c, "co": co, "lg": lg, "d": d.isoformat(), "t": t, "h": h, "a": a, **predict(m, h, a, r)})
+        logos = load_logos({(x["h"], x["co"]) for x in out} | {(x["a"], x["co"]) for x in out})
+        for x in out:
+            x["hl"], x["al"] = logos.get(x["h"]) or None, logos.get(x["a"]) or None
+        try:
+            import extra
+            ex, extra_res = extra.build(sys.modules[__name__], today)
+            out += ex
+        except Exception as e:
+            print("extra: saltato", e)
     sk = lambda x: (-1 if x["co"] == "Europa" else TOP.index(x["co"]) if x["co"] in TOP else 10,
                     "" if x["co"] in TOP or x["co"] == "Europa" else x["co"],
                     list(LEAGUES).index(x["c"]) if x["c"] in LEAGUES else 99, x["lg"], x["d"], x["t"])
+    for x in out:
+        if x.get("ts") is None:
+            x["ts"] = mk_ts(x["d"], x["t"])
     out.sort(key=sk)
     hist = update_history(out, res, today, extra_res)
     cut = (today - timedelta(days=14)).isoformat()
@@ -337,7 +371,7 @@ def main():
     tpl = open("template.html", encoding="utf-8").read()
     js = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     os.makedirs("docs", exist_ok=True)
-    open("docs/index.html", "w", encoding="utf-8").write(tpl.replace("__DATA__", js))
+    open("docs/index.html", "w", encoding="utf-8").write(tpl.replace("__LOGO__", logo_uri()).replace("__DATA__", js))
     print(f"Fatto: {len(out)} partite in {len({x['c'] for x in out})} campionati")
 
 

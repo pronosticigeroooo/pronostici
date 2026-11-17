@@ -83,7 +83,7 @@ def stats(res):
             s["am"] += y[pm.index(max(pm))]
             s["ab"] += y[pb.index(max(pb))]
         rc = pr["rec"]
-        if rc and rc["odd"]:
+        if rc and rc["odd"] and not rc.get("weak"):
             w = U.won(rc["key"], hg, ag)
             s["bets"] += 1
             s["w"] += bool(w)
