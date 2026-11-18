@@ -362,7 +362,7 @@ def main():
             x["ts"] = mk_ts(x["d"], x["t"])
     out.sort(key=sk)
     hist = update_history(out, res, today, extra_res)
-    cut = (today - timedelta(days=14)).isoformat()
+    cut = (today - timedelta(days=30)).isoformat()
     done = sorted([e for e in hist.values() if e.get("res") and e["d"] >= cut], key=sk)
     fin = [e for e in hist.values() if e.get("res")]
     stats = {"n": len(fin), "w": sum(1 for e in fin if e.get("won"))}

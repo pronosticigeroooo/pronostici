@@ -7,7 +7,6 @@ from zoneinfo import ZoneInfo
 
 BASE = "https://sports.bzzoiro.com/api/v2/"
 HORIZON = 7        # giorni di calendario mostrati
-INJ_DAYS = 2       # assenti e formazioni solo per le partite dei prossimi giorni
 WORKERS = 6
 ROME, UTC = ZoneInfo("Europe/Rome"), ZoneInfo("UTC")
 FD = {("Serie A", "Italy"): "I1", ("Serie B", "Italy"): "I2", ("Premier League", "England"): "E0",
@@ -178,8 +177,6 @@ def build(U, today, key, models):
     ids = [e["id"] for e in ev]
     with ThreadPoolExecutor(WORKERS) as ex:
         odds = dict(zip(ids, ex.map(lambda i: safe(f"events/{i}/odds/"), ids)))
-        near = [e["id"] for e in ev if when(e["event_date"]).date() <= today + timedelta(days=INJ_DAYS)]
-        lin = dict(zip(near, ex.map(lambda i: safe(f"events/{i}/lineups/"), near)))
     rev = {v: k for k, v in U.ALIAS.items()}
     out, n_ours, n_odds = [], 0, 0
     for e in ev:
@@ -196,17 +193,10 @@ def build(U, today, key, models):
         n_ours += bool(code and ours(U, models, rev, code, h, a))
         d = when(e["event_date"])
         it, fl = C.get(ctry, (ctry, ""))
-        inj = None
-        up = ((lin.get(e["id"]) or {}).get("unavailable_players")) or {}
-        f = lambda xs: [f"{p.get('name')} ({'squalif.' if p.get('status') == 'suspended' else 'inf.'})" for p in (xs or [])[:6] if p.get("name")]
-        if f(up.get("home")) or f(up.get("away")):
-            inj = {"h": f(up.get("home")), "a": f(up.get("away"))}
         rec = {"c": f"b{e['league_id']}", "co": it, "fl": flag(fl), "lg": name + (" (F)" if L.get("is_women") else ""),
                "d": d.date().isoformat(), "t": d.strftime("%H:%M"), "ts": int(d.timestamp()), "h": h, "a": a, "hl": None, "al": None,
                "src": "nostro modello + BSD" if len(vecs) == 2 else ("nostro modello" if code and ours(U, models, rev, code, h, a) else "BSD"),
                **picks(U, h, a, v, od)}
-        if inj:
-            rec["inj"] = inj
         out.append(rec)
     res = {}
     try:      # risultati recenti per verificare le scommesse passate
