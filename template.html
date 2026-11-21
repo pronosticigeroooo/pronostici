@@ -36,6 +36,8 @@ main{max-width:640px;margin:0 auto;padding:10px}
 .mw+.mw{border-top:1px solid var(--bd)}
 summary{display:grid;grid-template-columns:28px 46px minmax(0,1fr) auto;gap:8px;align-items:center;padding:10px;cursor:pointer;list-style:none;min-height:56px}
 summary::-webkit-details-marker{display:none}
+.nock{grid-template-columns:46px minmax(0,1fr) auto}
+.bx2{display:flex;align-items:center;gap:6px}
 .sm3{display:grid;grid-template-columns:28px 46px minmax(0,1fr);gap:8px;align-items:center;padding:10px}
 .sd{display:grid;grid-template-columns:46px minmax(0,1fr) auto;gap:8px;align-items:center;padding:10px;min-height:56px}
 .ck{flex:none;width:26px;height:26px;border-radius:50%;border:2px solid var(--bd);background:#fff;color:transparent;font-size:.8rem;line-height:1;font-weight:700;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer}
@@ -65,11 +67,12 @@ summary::-webkit-details-marker{display:none}
 .dot.l{background:var(--red)}
 .sec{font-weight:700;font-size:1rem;margin:16px 2px 2px}
 .dt{padding:2px 12px 10px;background:#fafbfc}
-.pk{display:grid;grid-template-columns:1fr auto 52px;gap:8px;padding:6px 0;border-top:1px solid var(--bd);font-size:.88rem}
+.pk{display:grid;grid-template-columns:1fr 52px;gap:8px;padding:6px 0;border-top:1px solid var(--bd);font-size:.88rem}
 .pk:first-child{border-top:0}
 .pk small{color:var(--mu)}
 .pk b{text-align:right;color:var(--ac)}
 .pk i{font-style:normal;text-align:right;color:var(--mu)}
+.tbl{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:6px}.tbl td,.tbl th{padding:5px 6px;text-align:right;border-bottom:1px solid var(--bd)}.tbl td:first-child,.tbl th:first-child{text-align:left}
 .card0{background:var(--card);border-radius:10px;padding:12px;margin:10px 0;box-shadow:0 1px 2px rgba(20,24,31,.06)}
 .cnt{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center;margin:6px 0}
 .cnt div{background:var(--card);border-radius:10px;padding:8px 2px;box-shadow:0 1px 2px rgba(20,24,31,.06)}
@@ -99,7 +102,7 @@ summary::-webkit-details-marker{display:none}
 <body>
 <header class="top"><div class="in">
 <img id="logo" class="logo" alt="Pronostici Calcio" hidden><h1 id="ttl">Pronostici Calcio</h1>
-<nav class="tabs"><button class="tb on" data-m="next">Partite</button><button class="tb" data-m="sel">Selezionate <span id="nsel"></span></button><button class="tb" data-m="done">Risultati</button><button class="tb" data-m="mas">Masaniello</button></nav>
+<nav class="tabs"><button class="tb on" data-m="next">Partite</button><button class="tb" id="tsel" data-m="sel" hidden>Selezionate <span id="nsel"></span></button><button class="tb" data-m="done">Risultati</button><button class="tb" data-m="mas">Masaniello</button></nav>
 </div></header>
 <main>
 <div id="demo"></div>
@@ -130,9 +133,10 @@ const NEXT=DATA.matches,DONE=DATA.done||[];
 const DM={};DONE.forEach(e=>{DM[mid(e)]=e});
 const jget=(k,d)=>{try{return JSON.parse(localStorage.getItem(k)||"null")||d}catch(e){return d}};
 const jset=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
-let SEL=jget("pc_sel",{}),MAS=jget("pc_mas",{cap:100,k:2,events:[]});
-const save=()=>jset("pc_sel",SEL),saveM=()=>jset("pc_mas",MAS);
-const PS=30,LIVE_MIN=150;
+let SEL=jget("pc_sel",{}),MAS=jget("pc_mas2",{cap:100,n:5,k:3,q:2,odds:[],res:[]});
+const save=()=>jset("pc_sel",SEL),saveM=()=>jset("pc_mas2",MAS);
+const PS=30,LIVE_MIN=150,SHOW_SEL=false;   // SHOW_SEL=true riattiva spunte, menu dei pronostici e scheda Selezionate
+if(SHOW_SEL)$("tsel").hidden=false;
 let mode="next",sel="",lg="",page=1,LIVE={},LIVE_RAW="";
 if(LOGO.indexOf("data:")===0){$("logo").src=LOGO;$("logo").hidden=false;$("ttl").hidden=true}
 if(DATA.demo)$("demo").innerHTML='<div class="demo">Anteprima con squadre e dati inventati. Online vedrai i dati reali.</div>';
@@ -165,7 +169,16 @@ function grade(){
 }
 const nsel=()=>{const n=Object.keys(SEL).length;$("nsel").textContent=n?"("+n+")":""};
 const today=()=>key(new Date());
-const nxt=()=>NEXT.filter(m=>m.d>=today());
+function pkFromPv(e){
+  const v=e.pv;if(!v||v.length<5)return[[e.top.label,e.top.market||"",e.top.p,null]];
+  const [H,D,A,O,B]=v;
+  return [["1 "+e.h,"Esito finale",H],["X","Esito finale",D],["2 "+e.a,"Esito finale",A],["1X","Doppia chance",H+D],["X2","Doppia chance",D+A],["12","Doppia chance",H+A],
+    ["Over 2,5","Under/Over",O],["Under 2,5","Under/Over",O==null?null:1-O],["Gol","Gol/No Gol",B],["No Gol","Gol/No Gol",B==null?null:1-B]]
+    .filter(x=>typeof x[2]==="number"&&!isNaN(x[2])).sort((a,b)=>b[2]-a[2]).map(x=>[x[0],x[1],x[2],null]);
+}
+const HAVE=new Set(NEXT.map(mid));
+const ALLM=NEXT.concat(DONE.filter(e=>!HAVE.has(mid(e))).map(e=>({...e,pk:pkFromPv(e)})));   // prossime + partite già giocate (cronologia)
+const nxt=()=>ALLM;
 const cur=()=>mode==="next"?nxt():DONE;
 const datesOf=()=>[...new Set(cur().map(m=>m.d))].sort();
 function firstDay(){const ds=datesOf(),t=today();return ds.find(d=>d>=t)||ds[ds.length-1]||""}
@@ -186,17 +199,18 @@ function drawLg(){
 }
 function team(n,u,sc){return `<span class="te"><span class="lo"><i>${esc(n.trim().charAt(0).toUpperCase())}</i>${u?`<img src="${esc(u)}" alt="" loading="lazy" onerror="this.remove()">`:""}</span><span class="tn">${esc(n)}</span>${sc!=null?`<b class="s1">${sc}</b>`:""}</span>`}
 function tmCol(m,st){return `<span class="tm">${m.t||""}${st.s==="live"?`<em class="live">${st.ht?"INT":"LIVE"}${st.min&&!st.ht?" "+esc(st.min)+"′":""}</em>`:st.s==="fin"?'<em class="fin">FIN</em>':""}</span>`}
-const ck=m=>`<button class="ck${SEL[mid(m)]?" on":""}" data-id="${esc(mid(m))}" aria-label="Seleziona partita">✓</button>`;
+const ck=m=>!SHOW_SEL?"":`<button class="ck${SEL[mid(m)]?" on":""}" data-id="${esc(mid(m))}" aria-label="Seleziona partita">✓</button>`;
 function selBox(x){
   const id=esc(x.id),rl=x.rec?x.rec.label:null;
-  return `<div class="sl"><select class="ps" data-id="${id}"${x.res?" disabled":""}><option value="">Scegli il tuo pronostico…</option>${x.pk.map((p,i)=>`<option value="${i}"${x.pick&&x.pick.label===p[0]?" selected":""}>${rl===p[0]?(x.rec.weak?"☆ ":"★ "):""}${esc(p[0])} · ${pc(p[2])}${p[3]?" · @"+f2(p[3]):""}</option>`).join("")}</select>${x.won!=null?`<i class="dot${x.won?"":" l"}"></i>`:""}</div>${x.rec?'<div class="mu pd">★ consigliata dall’app · ☆ consigliata con valore basso</div>':""}`;
+  return `<div class="sl"><select class="ps" data-id="${id}"${x.res?" disabled":""}><option value="">Scegli il tuo pronostico…</option>${x.pk.map((p,i)=>`<option value="${i}"${x.pick&&x.pick.label===p[0]?" selected":""}>${rl===p[0]?(x.rec.weak?"☆ ":"★ "):""}${esc(p[0])} · ${pc(p[2])}</option>`).join("")}</select>${x.won!=null?`<i class="dot${x.won?"":" l"}"></i>`:""}</div>${x.rec?'<div class="mu pd">★ consigliata dall’app · ☆ consigliata con valore basso</div>':""}`;
 }
 function row(m,sl){
   const r=m.top,st=state(m),sc=st.s!=="up"&&st.hs!=null?[st.hs,st.as]:[null,null];
-  const badge=`<span class="rec"><b>${esc(r.label)}</b><small>Più probabile · ${pc(r.p)}</small></span>`;
-  const pk=m.pk.slice(0,12).map(x=>`<div class="pk"><span>${esc(x[0])} <small>${x[1]}</small></span><i>${x[3]?"@"+f2(x[3]):""}</i><b>${pc(x[2])}</b></div>`).join("");
+  const dn=DM[mid(m)],dot=dn&&dn.won!=null?`<i class="dot${dn.won?"":" l"}"></i>`:"";
+  const badge=`<span class="bx2">${dot}<span class="rec"><b>${esc(r.label)}</b><small>Più probabile · ${pc(r.p)}</small></span></span>`;
+  const pk=m.pk.slice(0,12).map(x=>`<div class="pk"><span>${esc(x[0])} <small>${x[1]}</small></span><b>${pc(x[2])}</b></div>`).join("");
   const s=SEL[mid(m)];
-  return `<div class="mw"><details class="m" data-id="${esc(mid(m))}"><summary>${ck(m)}${tmCol(m,st)}<span class="tt">${team(m.h,m.hl,sc[0])}${team(m.a,m.al,sc[1])}${sl?`<span class="ll">${m.fl||flag(m.co)} ${esc(m.lg)}</span>`:""}</span>${badge}</summary><div class="dt">${pk}</div></details>${s?selBox(s):""}</div>`;
+  return `<div class="mw"><details class="m" data-id="${esc(mid(m))}"><summary class="${SHOW_SEL?"":"nock"}">${ck(m)}${tmCol(m,st)}<span class="tt">${team(m.h,m.hl,sc[0])}${team(m.a,m.al,sc[1])}${sl?`<span class="ll">${m.fl||flag(m.co)} ${esc(m.lg)}</span>`:""}</span>${badge}</summary><div class="dt">${pk}</div></details>${s?selBox(s):""}</div>`;
 }
 function rowDone(m){
   const p=m.top;
@@ -209,12 +223,26 @@ function rowSel(x){
 const grp=a=>{const g=[];a.forEach(m=>{let x=g.find(y=>y.c===m.c);if(!x)g.push(x={c:m.c,co:m.co,lg:m.lg,fl:m.fl,ms:[]});x.ms.push(m)});return g};
 const card=(x,f)=>`<div class="lg"><div class="lh">${x.fl||flag(x.co)} ${esc(x.lg)} <span>${x.co?"· "+esc(x.co):""}</span></div>${x.ms.map(f).join("")}</div>`;
 function mine(){
+  if(!SHOW_SEL)return"";
   const g=Object.values(SEL).filter(x=>x.won!=null&&x.pick);
   if(!g.length)return '<div class="card0"><b>Le mie scelte</b><div class="mu">Ancora nessuna partita conclusa. Seleziona le partite con ✓, scegli il tuo pronostico e qui vedrai la tua percentuale di vincita.</div></div>';
   const w=g.filter(x=>x.won).length,by={};
   g.forEach(x=>{const k=x.pick.market||"Altro";by[k]=by[k]||[0,0];by[k][0]++;if(x.won)by[k][1]++});
-  const od=g.filter(x=>x.pick.odd),roi=od.length?od.reduce((s,x)=>s+(x.won?x.pick.odd-1:-1),0)/od.length:null;
-  return `<div class="card0"><b>Le mie scelte</b><div>${w} vinte su ${g.length} (${pc(w/g.length)})${roi!=null?` · resa ${roi>0?"+":""}${(roi*100).toFixed(0)}% (puntata 1 sulle giocate con quota)`:""}</div><div class="mu">${Object.entries(by).map(([k,v])=>esc(k)+": "+v[1]+"/"+v[0]).join(" · ")}</div><div class="mu">Salvate solo su questo dispositivo.</div></div>`;
+  return `<div class="card0"><b>Le mie scelte</b><div>${w} vinte su ${g.length} (${pc(w/g.length)})</div><div class="mu">${Object.entries(by).map(([k,v])=>esc(k)+": "+v[1]+"/"+v[0]).join(" · ")}</div><div class="mu">Salvate solo su questo dispositivo.</div></div>`;
+}
+function calib(){
+  const g=DONE.filter(m=>m.top&&m.won!=null);if(g.length<10)return"";
+  const rows=[[0,.5],[.5,.6],[.6,.7],[.7,.8],[.8,1.01]].map(([lo,hi])=>{const x=g.filter(m=>m.top.p>=lo&&m.top.p<hi);
+    return x.length?`<tr><td>${Math.round(lo*100)}–${Math.min(100,Math.round(hi*100))}%</td><td>${x.length}</td><td>${pc(x.reduce((s,m)=>s+m.top.p,0)/x.length)}</td><td>${pc(x.filter(m=>m.won).length/x.length)}</td></tr>`:""}).join("");
+  return `<div class="card0"><b>Affidabilità delle percentuali</b><div class="mu">Quando l’app indica una certa %, quante volte ci prende davvero.</div><table class="tbl"><tr><th>Fascia</th><th>Partite</th><th>Prevista</th><th>Reale</th></tr>${rows}</table></div>`;
+}
+function monitor(){
+  const y=m=>m.res[0]>m.res[1]?0:m.res[0]===m.res[1]?1:2;
+  const br=(p,m)=>p.slice(0,3).reduce((s,v,i)=>s+(v-(i===y(m)?1:0))**2,0);
+  const hit=(p,m)=>p.slice(0,3).indexOf(Math.max(...p.slice(0,3)))===y(m);
+  const g=DONE.filter(m=>m.res&&m.pv&&m.pv[0]!=null&&m.mk&&m.mk[0]!=null);if(g.length<10)return"";
+  const av=f=>g.reduce((s,m)=>s+f(m),0)/g.length;
+  return `<div class="card0"><b>Monitoraggio dei numeri</b><div class="mu">Su ${g.length} partite concluse: errore delle previsioni (più basso = meglio) app <b>${av(m=>br(m.pv,m)).toFixed(3)}</b> · mercato <b>${av(m=>br(m.mk,m)).toFixed(3)}</b>. Esiti 1X2 indovinati: app <b>${pc(av(m=>hit(m.pv,m)?1:0))}</b> · mercato <b>${pc(av(m=>hit(m.mk,m)?1:0))}</b>.</div></div>`;
 }
 function pager(n){
   const pages=Math.max(1,Math.ceil(n/PS));page=Math.min(page,pages);
@@ -233,43 +261,43 @@ function renderDone(){
   const W=all.filter(m=>m.won).length,L=all.length-W;
   $("sum").textContent="L’app conta, per ogni partita, la scommessa con la probabilità più alta.";
   const head=`<div class="cnt"><div><b>${all.length}</b><span>Partite</span></div><div class="g"><b>${W}</b><span>Vinte</span></div><div class="r"><b>${L}</b><span>Perse</span></div><div><b>${all.length?pc(W/all.length):"–"}</b><span>Vittorie</span></div></div>`;
-  const first=page===1?mine():"";
+  const first=page===1?mine()+monitor()+calib():"";
   if(!all.length){$("pg").innerHTML="";$("list").innerHTML=head+first+'<div class="mu">Ancora nessuna partita conclusa.</div>';return}
   const [a,b]=pager(all.length),sl=all.slice(a,b),days=[...new Set(sl.map(m=>m.d))];
   $("list").innerHTML=head+first+days.map(d=>{const dd=all.filter(m=>m.d===d),w=dd.filter(m=>m.won).length;
     return `<div class="dh">${dayName(d)}<span>${w} vinte · ${dd.length-w} perse</span></div>`+grp(sl.filter(m=>m.d===d)).map(x=>card(x,rowDone)).join("")}).join("");
 }
+function masEvents(){const e=[];for(let i=0;i<MAS.n;i++)e.push({odd:MAS.odds[i]||MAS.q,res:MAS.res[i]===undefined?null:MAS.res[i]});return e}
 function masPlan(){
-  const ev=MAS.events,N=ev.length,K=Math.max(1,Math.min(Math.round(MAS.k)||1,N));
-  if(!N||!(MAS.cap>0))return null;
+  const ev=masEvents(),N=ev.length,K=Math.max(1,Math.min(Math.round(MAS.k)||1,N));
+  if(!(N>=1)||!(MAS.cap>0))return{err:"Inserisci un capitale e almeno un evento."};
   if(ev.some(e=>!(e.odd>1)))return{err:"Inserisci per ogni evento una quota maggiore di 1."};
   const V=Array.from({length:N+1},()=>Array(K+1).fill(0));
   for(let i=0;i<=N;i++)V[i][0]=1;
   for(let i=N-1;i>=0;i--){const q=ev[i].odd;for(let k=1;k<=K;k++)V[i][k]=V[i+1][k]*(1-1/q)+V[i+1][k-1]/q}
-  let c=MAS.cap,k=K,rows=[];
+  let c=MAS.cap,k=K,w=0,l=0;const rows=[];
   for(let i=0;i<N;i++){
-    const e=ev[i],q=e.odd,r=masRes(e);
-    if(k===0){rows.push({stake:0,note:"Obiettivo raggiunto: non giocare",c});continue}
-    if(V[i][k]<=0){rows.push({stake:0,note:"Obiettivo non più raggiungibile",c});continue}
+    const q=ev[i].odd,r=ev[i].res;
+    if(k===0){rows.push({q,stake:0,note:"Obiettivo raggiunto: non giocare",c});continue}
+    if(V[i][k]<=0){rows.push({q,stake:0,note:"Obiettivo non più raggiungibile",c});continue}
     const stake=(V[i+1][k-1]-V[i+1][k])/q*(c/V[i][k]);
-    let c2=c;if(r===true){c2=c+stake*(q-1);k--}else if(r===false){c2=c-stake}
-    rows.push({stake,c:c2,r});c=c2;
+    let c2=c;if(r===true){c2=c+stake*(q-1);k--;w++}else if(r===false){c2=c-stake;l++}
+    rows.push({q,stake,c:c2,r});c=c2;
   }
-  return{rows,K,T:MAS.cap/V[0][K],c,k};
+  return{rows,K,N,T:MAS.cap/V[0][K],c,k,w,l};
 }
-function masRes(e){const s=e.id&&SEL[e.id];return s&&s.won!=null?s.won:e.res}
 function renderMas(){
   $("sum").textContent="";$("pg").innerHTML="";
-  const P=masPlan(),ev=MAS.events;
-  let h=`<div class="card0"><b>Masaniello</b><div class="mu">Metodo di gestione della puntata: calcola quanto puntare su ogni evento per raggiungere l’obiettivo se vinci il numero di eventi richiesto. Non aumenta la probabilità di vincere e non rende profittevole una giocata senza valore: il capitale può comunque andare perso.</div>
-  <label class="fld">Capitale (€)<input class="mc" inputmode="decimal" value="${MAS.cap}"></label><label class="fld">Vittorie richieste<input class="mk" inputmode="numeric" value="${MAS.k}"></label>
-  <div><button class="bt" data-act="add">+ Evento</button><button class="bt" data-act="imp">Importa dalle selezionate</button><button class="bt sc2" data-act="reset">Azzera</button></div></div>`;
-  if(!ev.length)h+='<div class="mu">Aggiungi gli eventi della tua serie (almeno 2) o importa le partite che hai selezionato con il tuo pronostico e la quota.</div>';
-  else if(P&&P.err)h+=`<div class="card0">${P.err}</div>`;
-  else if(P){
-    h+=`<div class="card0"><div>Eventi: <b>${ev.length}</b> · vittorie richieste: <b>${P.K}</b></div><div>Obiettivo finale: <b>${eur(P.T)}</b> (${P.T>=MAS.cap?"+":""}${eur(P.T-MAS.cap)}, ${((P.T/MAS.cap-1)*100).toFixed(0)}%)</div><div>Capitale attuale: <b>${eur(P.c)}</b> · vittorie ancora da fare: <b>${P.k}</b></div></div>`;
-    h+=`<div class="card0">`+ev.map((e,i)=>{const r=P.rows[i],lk=e.id&&SEL[e.id]&&SEL[e.id].won!=null,res=masRes(e);
-      return `<div class="mr"><b>#${i+1}</b> <input class="md" data-i="${i}" placeholder="Descrizione (es. Inter - Milan: 1)" value="${esc(e.label||"")}"><div class="mrow"><label class="fld">Quota<input class="mq" data-i="${i}" inputmode="decimal" value="${e.odd}"></label><span>Puntata: <b>${r.stake>0?eur(r.stake):"—"}</b></span><button class="ob w${res===true?" on":""}" data-act="win" data-i="${i}"${lk?" disabled":""}>Vinta</button><button class="ob l${res===false?" on":""}" data-act="loss" data-i="${i}"${lk?" disabled":""}>Persa</button><button class="ob" data-act="del" data-i="${i}" aria-label="Elimina">✕</button></div>${r.note?`<div class="mu">${r.note}</div>`:""}</div>`}).join("")+`</div>`;
+  const P=masPlan();
+  let h=`<div class="card0"><b>Calcolatore Masaniello</b>
+  <div class="mu">Calcola la puntata di ogni evento per raggiungere l’obiettivo se vinci il numero di eventi richiesto. È un metodo di gestione del capitale: non aumenta la probabilità di vincere.</div>
+  <div class="mrow2"><label class="fld">Capitale (€)<input class="mc" inputmode="decimal" value="${MAS.cap}"></label><label class="fld">Numero eventi<input class="mn" inputmode="numeric" value="${MAS.n}"></label><label class="fld">Eventi da vincere<input class="mk" inputmode="numeric" value="${MAS.k}"></label><label class="fld">Quota media<input class="mq0" inputmode="decimal" value="${MAS.q}"></label></div>
+  <div><button class="bt" data-act="calc">Calcola</button><button class="bt sc2" data-act="clr">Azzera esiti</button><button class="bt sc2" data-act="reset">Nuova serie</button></div></div>`;
+  if(P.err)h+=`<div class="card0">${P.err}</div>`;
+  else{
+    h+=`<div class="card0"><div class="cnt"><div><b>${eur(MAS.cap)}</b><span>Capitale</span></div><div class="g"><b>${eur(P.T)}</b><span>Obiettivo</span></div><div><b>${eur(P.c)}</b><span>Attuale</span></div><div><b>${P.w}/${P.l}</b><span>Vinte/Perse</span></div></div>
+    <div class="mu">Profitto previsto se vinci ${P.K} eventi su ${P.N}: <b>${eur(P.T-MAS.cap)}</b> (${((P.T/MAS.cap-1)*100).toFixed(0)}%). Vittorie ancora da fare: <b>${P.k}</b>.</div></div>`;
+    h+=`<div class="card0">`+P.rows.map((r,i)=>`<div class="mr"><div class="mrow"><b>#${i+1}</b><label class="fld">Quota<input class="mqi" data-i="${i}" inputmode="decimal" value="${r.q}"></label><span>Puntata <b>${r.stake>0?eur(r.stake):"—"}</b></span><span class="mu">Vincita ${r.stake>0?eur(r.stake*r.q):"—"}</span></div><div class="mrow"><button class="ob w${r.r===true?" on":""}" data-act="win" data-i="${i}">Vinta</button><button class="ob l${r.r===false?" on":""}" data-act="loss" data-i="${i}">Persa</button><span class="mu">Capitale dopo: ${eur(r.c)}</span></div>${r.note?`<div class="mu">${r.note}</div>`:""}</div>`).join("")+`</div>`;
   }
   $("list").innerHTML=h;
 }
@@ -307,12 +335,10 @@ function toggle(id){
 const num=v=>parseFloat(String(v).replace(",","."));
 function masAct(b){
   const a=b.dataset.act,i=+b.dataset.i;
-  if(a==="add")MAS.events.push({id:"",label:"",odd:2,res:null});
-  else if(a==="reset"){if(!confirm("Azzerare il Masaniello?"))return;MAS.events=[]}
-  else if(a==="imp"){let sk=0;Object.values(SEL).forEach(x=>{if(MAS.events.some(e=>e.id===x.id))return;if(x.pick&&x.pick.odd)MAS.events.push({id:x.id,label:`${x.h} - ${x.a}: ${x.pick.label}`,odd:x.pick.odd,res:null});else sk++});if(sk)alert(sk+" partite selezionate non importate: manca il pronostico scelto o la quota.")}
-  else if(a==="win")MAS.events[i].res=MAS.events[i].res===true?null:true;
-  else if(a==="loss")MAS.events[i].res=MAS.events[i].res===false?null:false;
-  else if(a==="del")MAS.events.splice(i,1);
+  if(a==="win")MAS.res[i]=MAS.res[i]===true?null:true;
+  else if(a==="loss")MAS.res[i]=MAS.res[i]===false?null:false;
+  else if(a==="clr"){MAS.res=[]}
+  else if(a==="reset"){if(!confirm("Iniziare una nuova serie?"))return;MAS.res=[];MAS.odds=[]}
   saveM();renderMas();
 }
 $("list").addEventListener("click",e=>{
@@ -321,22 +347,37 @@ $("list").addEventListener("click",e=>{
 $("list").addEventListener("change",e=>{
   const t=e.target,s=t.closest&&t.closest(".ps");
   if(s){const x=SEL[s.dataset.id];if(!x)return;const p=s.value===""?null:x.pk[+s.value];x.pick=p?{label:p[0],market:p[1],p:p[2],odd:p[3]}:null;save();return}
-  const c=t.classList;
-  if(c.contains("mc")){MAS.cap=num(t.value)||0;saveM();renderMas()}
-  else if(c.contains("mk")){MAS.k=num(t.value)||1;saveM();renderMas()}
-  else if(c.contains("md")){MAS.events[+t.dataset.i].label=t.value;saveM()}
-  else if(c.contains("mq")){MAS.events[+t.dataset.i].odd=num(t.value)||0;saveM();renderMas()}
+  const c=t.classList,v=num(t.value);
+  if(c.contains("mc")){MAS.cap=v>0?v:0}
+  else if(c.contains("mn")){MAS.n=Math.max(1,Math.min(30,Math.round(v)||1));MAS.k=Math.min(MAS.k,MAS.n);MAS.res=MAS.res.slice(0,MAS.n);MAS.odds=MAS.odds.slice(0,MAS.n)}
+  else if(c.contains("mk")){MAS.k=Math.max(1,Math.min(MAS.n,Math.round(v)||1))}
+  else if(c.contains("mq0")){MAS.q=v>1?v:2;MAS.odds=[]}
+  else if(c.contains("mqi")){MAS.odds[+t.dataset.i]=v>1?v:0}
+  else return;
+  saveM();renderMas();
 });
 $("list").addEventListener("toggle",e=>{if(e.target.open)document.querySelectorAll("#list details.m[open]").forEach(d=>{if(d!==e.target)d.open=false})},true);
-$("pg").onclick=e=>{const b=e.target.closest("button");if(!b||b.disabled)return;page+=b.dataset.d==="n"?1:-1;render();window.scrollTo(0,0)};
-$("pv").onclick=()=>{if($("pv").disabled)return;sel=addD(sel,-1);page=1;drawDays();render()};
-$("nx").onclick=()=>{if($("nx").disabled)return;sel=addD(sel,1);page=1;drawDays();render()};
-$("dp").onchange=e=>{if(e.target.value){sel=e.target.value;page=1;drawDays();render()}};
+$("pg").onclick=e=>{const b=e.target.closest("button");if(!b||b.disabled)return;page+=b.dataset.d==="n"?1:-1;nav();render();window.scrollTo(0,0)};
+$("pv").onclick=()=>{if($("pv").disabled)return;sel=addD(sel,-1);page=1;nav();drawDays();render()};
+$("nx").onclick=()=>{if($("nx").disabled)return;sel=addD(sel,1);page=1;nav();drawDays();render()};
+$("dp").onchange=e=>{if(e.target.value){sel=e.target.value;page=1;nav();drawDays();render()}};
 $("dp").onclick=e=>{if(!("ontouchstart" in window)){try{e.target.showPicker()}catch(_){}}};
-$("lg").onchange=e=>{lg=e.target.value;page=1;render()};
+$("lg").onchange=e=>{lg=e.target.value;page=1;nav();render()};
 document.querySelector(".tabs").onclick=e=>{const b=e.target.closest(".tb");if(!b)return;
   mode=b.dataset.m;lg="";page=1;document.querySelectorAll(".tb").forEach(t=>t.classList.toggle("on",t===b));
-  sel=mode==="next"?firstDay():"";draw();window.scrollTo(0,0)};
+  sel=mode==="next"?firstDay():"";nav();draw();window.scrollTo(0,0)};
+function nav(push){
+  const h="#/"+mode+"/"+(sel||"-")+"/"+page+(lg?"/"+encodeURIComponent(lg):"");
+  try{if(push===false||location.hash===h)history.replaceState(null,"",h);else history.pushState(null,"",h)}catch(e){}
+}
+function readHash(){
+  const p=(location.hash||"").replace(/^#\/?/,"").split("/");
+  if(!p[0])return false;
+  mode=["next","done","mas","sel"].includes(p[0])?p[0]:"next";if(mode==="sel"&&!SHOW_SEL)mode="next";
+  sel=p[1]&&p[1]!=="-"?p[1]:"";page=+p[2]||1;lg=p[3]?decodeURIComponent(p[3]):"";return true;
+}
+const setTabs=()=>document.querySelectorAll(".tb").forEach(x=>x.classList.toggle("on",x.dataset.m===mode));
+window.addEventListener("popstate",()=>{readHash();if(mode==="next"&&!sel)sel=firstDay();setTabs();draw();window.scrollTo(0,0)});
 async function pollLive(){
   try{const r=await fetch("live.json?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;const t=await r.text();if(t===LIVE_RAW)return;
     LIVE_RAW=t;LIVE=JSON.parse(t).events||{};if(mode==="next"||mode==="sel")renderKeep()}catch(e){}
@@ -344,7 +385,7 @@ async function pollLive(){
 const playing=()=>NEXT.some(m=>m.ts&&m.ts*1000<=Date.now()&&Date.now()<m.ts*1000+LIVE_MIN*60000);
 let n30=0;setInterval(()=>{n30++;if(playing()||n30%10===0)pollLive();if(n30%2===0&&(mode==="next"||mode==="sel"))renderKeep()},30000);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden){pollLive();if(mode==="next"||mode==="sel")renderKeep()}});
-sel=firstDay();draw();pollLive();
+readHash();if(mode==='next'&&(!sel||sel<today()))sel=firstDay();setTabs();nav(false);draw();pollLive();   // all'apertura: sempre oggi
 </script>
 </body>
 </html>
